@@ -458,17 +458,6 @@ class MockGenViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.generatedMock.contains("Error:"))
     }
     
-    func testGenerateMockInvalidProtocol() {
-        viewModel.protocolInput = "invalid protocol syntax {"
-        viewModel.generateMock()
-        
-        // Should either generate with best effort or show error
-        // FIXME: обработка ошибок
-//        XCTAssertTrue(
-//            viewModel.generatedMock.isEmpty || viewModel.generatedMock.contains("Error:")
-//        )
-    }
-    
     func testGenerateMockWithProperties() {
         let input = """
         protocol MyRouter {
@@ -579,7 +568,7 @@ class MockGenCodeGeneratorTests: XCTestCase {
         let protocolDef = ProtocolDefinition(
             name: "MyRouter",
             properties: [
-                ProtocolProperty(name: "currentPage", type: "String")
+                ProtocolProperty(name: "currentPage", type: "String", isSettable: true)
             ],
             methods: []
         )

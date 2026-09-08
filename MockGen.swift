@@ -29,6 +29,7 @@ struct MethodParameter {
 struct ProtocolProperty {
     let name: String
     let type: String
+    let isSettable: Bool
 }
 
 struct ProtocolDefinition {
@@ -44,198 +45,318 @@ struct MockFile {
 
 // MARK: - Parser
 
-class MockGenParser {
+final class MockGenParser {
+
+    private struct CollapsedLine {
+        let collapsed: String
+        let original: String
+    }
 
     func parseProtocol(_ input: String) -> ProtocolDefinition? {
-        // Clean comments and documentation
         let cleaned = cleanProtocol(input)
-        let originalLines = cleaned.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        
-        // Collapse multiline methods into single lines
-        let collapsed = collapseMultilineMethods(cleaned)
-        let lines = collapsed.split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
+        let collapsedLines = collapseMultilineMethods(cleaned)
+        let collapsedOnly = collapsedLines.map(\.collapsed)
 
-        // Find protocol name
-        guard let protocolName = extractProtocolName(from: lines) else {
+        guard let protocolName = extractProtocolName(from: collapsedOnly) else {
             return nil
         }
 
-        // Find properties and methods
         var properties: [ProtocolProperty] = []
         var methods: [ProtocolMethod] = []
 
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
+        for line in collapsedLines {
+            let trimmed = line.collapsed.trimmingCharacters(in: .whitespacesAndNewlines)
 
-            // Parse properties
-            if trimmed.contains("var ") && trimmed.contains("{ get }") {
-                if let prop = parseProperty(trimmed) {
-                    properties.append(prop)
+            if trimmed.contains("var ") {
+                if let property = parseProperty(trimmed) {
+                    properties.append(property)
                 }
-            }
-            // Parse methods
-            else if trimmed.contains("func ") {
-                if var method = parseMethod(trimmed) {
-                    // Найти оригинальную сигнатуру с переносами
-                    method = ProtocolMethod(
-                        name: method.name,
-                        parameters: method.parameters,
-                        returnType: method.returnType,
-                        isAsync: method.isAsync,
-                        isThrows: method.isThrows,
-                        fullSignature: method.fullSignature,
-                        originalSignature: findOriginalSignature(methodName: method.name, in: originalLines)
-                    )
+            } else if trimmed.contains("func ") {
+                if let method = parseMethod(trimmed, originalSignature: line.original) {
                     methods.append(method)
                 }
             }
         }
 
-        return ProtocolDefinition(name: protocolName, properties: properties, methods: methods)
+        return ProtocolDefinition(
+            name: protocolName,
+            properties: properties,
+            methods: methods
+        )
     }
-    
-    private func findOriginalSignature(methodName: String, in lines: [String]) -> String? {
-        // Не сохраняем оригинальное форматирование - используем fullSignature
-        return nil
-    }
-    
-    private func collapseMultilineMethods(_ input: String) -> String {
-        var result = ""
-        let lines = input.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        
-        var i = 0
-        while i < lines.count {
-            let line = lines[i]
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            
-            // If line contains func, check if it's multiline
-            if trimmed.contains("func ") {
-                var methodLines = [line]
-                var j = i + 1
-                var openParens = 0
-                
-                // Count parentheses in first line
-                for char in trimmed {
-                    if char == "(" { openParens += 1 }
-                    else if char == ")" { openParens -= 1 }
-                }
-                
-                // Collect remaining lines until parentheses are balanced
-                while j < lines.count && openParens > 0 {
-                    methodLines.append(lines[j])
-                    let nextTrimmed = lines[j].trimmingCharacters(in: .whitespaces)
-                    for char in nextTrimmed {
-                        if char == "(" { openParens += 1 }
-                        else if char == ")" { openParens -= 1 }
-                    }
-                    j += 1
-                }
-                
-                // Join method lines with single space
-                let fullMethod = methodLines.map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: " ")
-                result += fullMethod + "\n"
-                i = j
-            } else {
-                result += line + "\n"
-                i += 1
-            }
-        }
-        
-        return result
-    }
+
+    // MARK: - Cleaning
 
     private func cleanProtocol(_ input: String) -> String {
+        removeComments(from: input)
+    }
+
+    private func removeComments(from input: String) -> String {
         var result = ""
-        let lines = input.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var index = input.startIndex
 
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
+        var isInsideLineComment = false
+        var isInsideBlockComment = false
+        var isInsideString = false
+        var previousCharacter: Character?
 
-            // Skip comments and documentation
-            if trimmed.hasPrefix("//") || trimmed.hasPrefix("///") || trimmed.hasPrefix("/*") || trimmed.hasPrefix("*") {
+        while index < input.endIndex {
+            let character = input[index]
+            let nextIndex = input.index(after: index)
+            let nextCharacter = nextIndex < input.endIndex ? input[nextIndex] : nil
+
+            if isInsideLineComment {
+                if character == "\n" {
+                    isInsideLineComment = false
+                    result.append(character)
+                }
+
+                index = nextIndex
+                previousCharacter = character
                 continue
             }
 
-            result += line + "\n"
+            if isInsideBlockComment {
+                if character == "*" && nextCharacter == "/" {
+                    isInsideBlockComment = false
+                    index = input.index(after: nextIndex)
+                    previousCharacter = "/"
+                    continue
+                }
+
+                if character == "\n" {
+                    result.append("\n")
+                }
+
+                index = nextIndex
+                previousCharacter = character
+                continue
+            }
+
+            if character == "\"" && previousCharacter != "\\" {
+                isInsideString.toggle()
+                result.append(character)
+                index = nextIndex
+                previousCharacter = character
+                continue
+            }
+
+            if !isInsideString {
+                if character == "/" && nextCharacter == "/" {
+                    isInsideLineComment = true
+                    index = input.index(after: nextIndex)
+                    previousCharacter = "/"
+                    continue
+                }
+
+                if character == "/" && nextCharacter == "*" {
+                    isInsideBlockComment = true
+                    index = input.index(after: nextIndex)
+                    previousCharacter = "*"
+                    continue
+                }
+            }
+
+            result.append(character)
+            index = nextIndex
+            previousCharacter = character
         }
 
         return result
     }
 
-    private func extractProtocolName(from lines: [String]) -> String? {
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.contains("protocol ") {
-                let pattern = "protocol\\s+(\\w+)"
-                if let regex = try? NSRegularExpression(pattern: pattern) {
-                    let nsString = trimmed as NSString
-                    if let match = regex.firstMatch(in: trimmed, range: NSRange(location: 0, length: nsString.length)) {
-                        if let range = Range(match.range(at: 1), in: trimmed) {
-                            return String(trimmed[range])
-                        }
-                    }
+    // MARK: - Multiline collapsing
+
+    private func collapseMultilineMethods(_ input: String) -> [CollapsedLine] {
+        let lines = input
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map(String.init)
+
+        var result: [CollapsedLine] = []
+        var index = 0
+
+        while index < lines.count {
+            let line = lines[index]
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            guard trimmed.contains("func ") else {
+                result.append(
+                    CollapsedLine(
+                        collapsed: line,
+                        original: line
+                    )
+                )
+                index += 1
+                continue
+            }
+
+            var methodLines: [String] = [line]
+            var parenDepth = parenthesesDelta(in: trimmed)
+            var nextIndex = index + 1
+
+            while nextIndex < lines.count {
+                let nextLine = lines[nextIndex]
+                let nextTrimmed = nextLine.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                let shouldContinueBecauseParensAreOpen = parenDepth > 0
+                let shouldContinueBecauseReturnIsOnNextLine =
+                    parenDepth == 0 &&
+                    (
+                        nextTrimmed.hasPrefix("async") ||
+                        nextTrimmed.hasPrefix("throws") ||
+                        nextTrimmed.hasPrefix("rethrows") ||
+                        nextTrimmed.hasPrefix("->") ||
+                        nextTrimmed.hasPrefix("where ")
+                    )
+
+                guard shouldContinueBecauseParensAreOpen || shouldContinueBecauseReturnIsOnNextLine else {
+                    break
+                }
+
+                methodLines.append(nextLine)
+                parenDepth += parenthesesDelta(in: nextTrimmed)
+                nextIndex += 1
+            }
+
+            let collapsed = methodLines
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+
+            let original = methodLines.joined(separator: "\n")
+
+            result.append(
+                CollapsedLine(
+                    collapsed: collapsed,
+                    original: original
+                )
+            )
+
+            index = nextIndex
+        }
+
+        return result
+    }
+
+    private func parenthesesDelta(in string: String) -> Int {
+        var delta = 0
+        var isInsideString = false
+        var previousCharacter: Character?
+
+        for character in string {
+            if character == "\"" && previousCharacter != "\\" {
+                isInsideString.toggle()
+            }
+
+            if !isInsideString {
+                if character == "(" {
+                    delta += 1
+                } else if character == ")" {
+                    delta -= 1
                 }
             }
+
+            previousCharacter = character
         }
+
+        return delta
+    }
+
+    // MARK: - Protocol name
+
+    private func extractProtocolName(from lines: [String]) -> String? {
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            let pattern = "\\bprotocol\\s+(\\w+)"
+
+            guard let regex = try? NSRegularExpression(pattern: pattern) else {
+                continue
+            }
+
+            let nsString = trimmed as NSString
+            let fullRange = NSRange(location: 0, length: nsString.length)
+
+            guard let match = regex.firstMatch(in: trimmed, range: fullRange),
+                  let nameRange = Range(match.range(at: 1), in: trimmed) else {
+                continue
+            }
+
+            return String(trimmed[nameRange])
+        }
+
         return nil
     }
 
+    // MARK: - Properties
+
     private func parseProperty(_ line: String) -> ProtocolProperty? {
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard trimmed.contains("var ") && trimmed.contains(":") else { return nil }
+        guard trimmed.contains("var "),
+              trimmed.contains(":"),
+              trimmed.contains("{"),
+              trimmed.contains("}") else {
+            return nil
+        }
 
-        var content = trimmed.replacingOccurrences(of: "var ", with: "")
-        content = content.replacingOccurrences(of: "{ get }", with: "").trimmingCharacters(in: .whitespaces)
+        let pattern = "\\bvar\\s+(\\w+)\\s*:\\s*(.*?)\\s*\\{\\s*(.*?)\\s*\\}"
 
-        let parts = content.split(separator: ":", maxSplits: 1).map { String($0).trimmingCharacters(in: .whitespaces) }
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return nil
+        }
 
-        guard parts.count == 2 else { return nil }
+        let nsString = trimmed as NSString
+        let fullRange = NSRange(location: 0, length: nsString.length)
 
-        let propName = parts[0]
-        let propType = parts[1]
+        guard let match = regex.firstMatch(in: trimmed, range: fullRange),
+              let nameRange = Range(match.range(at: 1), in: trimmed),
+              let typeRange = Range(match.range(at: 2), in: trimmed),
+              let accessorRange = Range(match.range(at: 3), in: trimmed) else {
+            return nil
+        }
 
-        return ProtocolProperty(name: propName, type: propType)
+        let name = String(trimmed[nameRange])
+        let type = String(trimmed[typeRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let accessors = String(trimmed[accessorRange])
+
+        return ProtocolProperty(
+            name: name,
+            type: type,
+            isSettable: accessors.contains("set")
+        )
     }
 
-    private func parseMethod(_ line: String) -> ProtocolMethod? {
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
+    // MARK: - Methods
 
-        guard trimmed.contains("func ") else { return nil }
-        var content = trimmed.replacingOccurrences(of: "func ", with: "")
+    private func parseMethod(_ line: String, originalSignature: String?) -> ProtocolMethod? {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let funcRange = trimmed.range(of: "func ") else {
+            return nil
+        }
+
+        let content = String(trimmed[funcRange.upperBound...])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard let parenStart = content.firstIndex(of: "("),
               let parenEnd = content.lastIndex(of: ")") else {
             return nil
         }
 
-        let name = String(content[..<parenStart]).trimmingCharacters(in: .whitespaces)
+        let rawName = String(content[..<parenStart])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let name = rawName.components(separatedBy: "<").first ?? rawName
+
         let paramsString = String(content[content.index(after: parenStart)..<parenEnd])
-        let afterParams = content[content.index(after: parenEnd)...].trimmingCharacters(in: .whitespaces)
-        
-        // Сохраняем полную сигнатуру для последующей вставки
-        let fullSignature = String(content)
+
+        let afterParams = String(content[content.index(after: parenEnd)...])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
 
         let parameters = parseParameters(paramsString)
-
-        var isAsync = false
-        var isThrows = false
-        var returnType = "Void"
-
-        if afterParams.contains("async") { isAsync = true }
-        if afterParams.contains("throws") { isThrows = true }
-
-        if afterParams.contains("->") {
-            if let arrow = afterParams.range(of: "->") {
-                let returnPart = String(afterParams[arrow.upperBound...])
-                    .trimmingCharacters(in: .whitespaces)
-                    .replacingOccurrences(of: "Void", with: "")
-                    .trimmingCharacters(in: .whitespaces)
-                if !returnPart.isEmpty {
-                    returnType = returnPart
-                }
-            }
-        }
+        let isAsync = afterParams.containsWord("async")
+        let isThrows = afterParams.containsWord("throws") || afterParams.containsWord("rethrows")
+        let returnType = parseReturnType(from: afterParams)
 
         return ProtocolMethod(
             name: name,
@@ -243,73 +364,138 @@ class MockGenParser {
             returnType: returnType,
             isAsync: isAsync,
             isThrows: isThrows,
-            fullSignature: fullSignature,
-            originalSignature: nil
+            fullSignature: content,
+            originalSignature: originalSignature
         )
     }
 
+    private func parseReturnType(from afterParams: String) -> String {
+        guard let arrowRange = afterParams.range(of: "->") else {
+            return "Void"
+        }
+
+        var returnPart = String(afterParams[arrowRange.upperBound...])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let whereRange = returnPart.range(of: " where ") {
+            returnPart = String(returnPart[..<whereRange.lowerBound])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        if returnPart == "Void" || returnPart == "()" || returnPart.isEmpty {
+            return "Void"
+        }
+
+        return returnPart
+    }
+
     private func parseParameters(_ paramsString: String) -> [MethodParameter] {
+        let params = splitByComma(paramsString)
         var parameters: [MethodParameter] = []
 
-        // Split by comma, but respect nested angle brackets
-        let params = splitByComma(paramsString)
+        for rawParam in params {
+            let param = rawParam.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        for param in params {
-            if param.isEmpty { continue }
+            guard !param.isEmpty,
+                  let colonIndex = param.firstIndex(of: ":") else {
+                continue
+            }
 
-            var paramNamePart = param
+            let beforeColon = String(param[..<colonIndex])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
 
-            // Check if has underscore (no external name)
-            var externalName: String? = nil
-            if paramNamePart.hasPrefix("_") {
+            let afterColon = String(param[param.index(after: colonIndex)...])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            let nameParts = beforeColon
+                .split(separator: " ")
+                .map(String.init)
+
+            let externalName: String?
+            let internalName: String
+
+            if nameParts.count == 1 {
+                externalName = nil
+                internalName = nameParts[0]
+            } else if nameParts.first == "_" {
                 externalName = "_"
-                paramNamePart = paramNamePart.dropFirst().trimmingCharacters(in: .whitespaces)
+                internalName = nameParts.last ?? "_"
+            } else {
+                externalName = nameParts.first
+                internalName = nameParts.last ?? beforeColon
             }
 
-            // Split by colon
-            let colonIndex = paramNamePart.firstIndex(of: ":")
-            if let colonIdx = colonIndex {
-                let beforeColon = String(paramNamePart[..<colonIdx]).trimmingCharacters(in: .whitespaces)
-                let afterColon = String(paramNamePart[paramNamePart.index(after: colonIdx)...]).trimmingCharacters(in: .whitespaces)
+            let typeWithoutDefault = splitTypeAndDefaultValue(afterColon).type
 
-                // Extract real parameter name (last word in beforeColon)
-                let nameWords = beforeColon.split(separator: " ").map { String($0) }
-                let paramName = nameWords.last ?? beforeColon
-
-                // Remove default value if present
-                let paramType = afterColon.split(separator: "=").first.map { String($0).trimmingCharacters(in: .whitespaces) } ?? afterColon
-
-                parameters.append(MethodParameter(
-                    name: paramName,
+            parameters.append(
+                MethodParameter(
+                    name: internalName,
                     externalName: externalName,
-                    type: paramType
-                ))
-            }
+                    type: typeWithoutDefault
+                )
+            )
         }
 
         return parameters
     }
 
-    private func splitByComma(_ str: String) -> [String] {
-        var result: [String] = []
+    private func splitTypeAndDefaultValue(_ string: String) -> (type: String, defaultValue: String?) {
         var current = ""
         var depth = 0
 
-        for char in str {
-            if char == "<" || char == "[" || char == "(" {
+        for character in string {
+            if character == "<" || character == "[" || character == "(" {
                 depth += 1
-            } else if char == ">" || char == "]" || char == ")" {
+            } else if character == ">" || character == "]" || character == ")" {
                 depth -= 1
-            } else if char == "," && depth == 0 {
-                result.append(current.trimmingCharacters(in: .whitespaces))
-                current = ""
-                continue
+            } else if character == "=" && depth == 0 {
+                let type = current.trimmingCharacters(in: .whitespacesAndNewlines)
+                let defaultValue = String(string[string.index(after: string.firstIndex(of: "=")!)...])
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                return (type, defaultValue)
             }
-            current.append(char)
+
+            current.append(character)
         }
 
-        if !current.isEmpty {
-            result.append(current.trimmingCharacters(in: .whitespaces))
+        return (
+            current.trimmingCharacters(in: .whitespacesAndNewlines),
+            nil
+        )
+    }
+
+    private func splitByComma(_ string: String) -> [String] {
+        var result: [String] = []
+        var current = ""
+        var depth = 0
+        var isInsideString = false
+        var previousCharacter: Character?
+
+        for character in string {
+            if character == "\"" && previousCharacter != "\\" {
+                isInsideString.toggle()
+            }
+
+            if !isInsideString {
+                if character == "<" || character == "[" || character == "(" {
+                    depth += 1
+                } else if character == ">" || character == "]" || character == ")" {
+                    depth -= 1
+                } else if character == "," && depth == 0 {
+                    result.append(current.trimmingCharacters(in: .whitespacesAndNewlines))
+                    current = ""
+                    previousCharacter = character
+                    continue
+                }
+            }
+
+            current.append(character)
+            previousCharacter = character
+        }
+
+        let tail = current.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !tail.isEmpty {
+            result.append(tail)
         }
 
         return result
@@ -318,14 +504,19 @@ class MockGenParser {
 
 // MARK: - Code Generator
 
-class MockGenCodeGenerator {
+final class MockGenCodeGenerator {
 
     let protocolDef: ProtocolDefinition
     let authorName: String
     let appName: String
     let moduleName: String
 
-    init(protocolDef: ProtocolDefinition, authorName: String, appName: String, moduleName: String) {
+    init(
+        protocolDef: ProtocolDefinition,
+        authorName: String,
+        appName: String,
+        moduleName: String
+    ) {
         self.protocolDef = protocolDef
         self.authorName = authorName
         self.appName = appName
@@ -345,16 +536,18 @@ class MockGenCodeGenerator {
     }
 
     private var needsRxSwift: Bool {
-        for method in protocolDef.methods {
-            if method.returnType.contains("Single<") || method.returnType.contains("Completable") {
-                return true
-            }
+        protocolDef.methods.contains {
+            $0.returnType.contains("Single<") ||
+            $0.returnType.contains("Completable")
         }
-        return false
+    }
+
+    private var isInteractorProtocol: Bool {
+        protocolDef.name.contains("Interactor")
     }
 
     func generateMock() -> MockFile {
-        let mockName = protocolDef.name.replacingOccurrences(of: "Protocol", with: "") + "Mock"
+        let mockName = makeMockName(from: protocolDef.name)
 
         var code = """
 //
@@ -381,37 +574,15 @@ final class \(mockName): \(protocolDef.name) {
 
 """
 
-        // Generate property implementations
         var propertyLines: [String] = []
 
-        // Properties from protocol
-        for property in protocolDef.properties {
-            propertyLines.append("    var \(property.name): \(property.type) = \(property.type)()")
-        }
+        propertyLines.append(contentsOf: generateProtocolProperties())
 
-        // Add separator if we have both protocol properties and method properties
         if !propertyLines.isEmpty && !protocolDef.methods.isEmpty {
             propertyLines.append("")
         }
 
-        // Properties for tracking method calls and parameters
-        for (index, method) in protocolDef.methods.enumerated() {
-            let methodNameCamel = method.name
-            let callCountProp = "\(methodNameCamel)CallCount"
-
-            propertyLines.append("    private(set) var \(callCountProp) = 0")
-
-            for param in method.parameters {
-                let propName = generatePropertyName(method: method, param: param)
-                let propType = makePropertyType(param.type)
-                propertyLines.append("    private(set) var \(propName): \(propType)")
-            }
-
-            // Add separator between method property groups (but not after last one)
-            if index < protocolDef.methods.count - 1 {
-                propertyLines.append("")
-            }
-        }
+        propertyLines.append(contentsOf: generateTrackingProperties())
 
         code += propertyLines.joined(separator: "\n")
 
@@ -419,156 +590,511 @@ final class \(mockName): \(protocolDef.name) {
             code += "\n\n"
         }
 
-        // Generate method implementations
-        var methodLines: [String] = []
-        for method in protocolDef.methods {
-            methodLines.append(generateMethodImplementation(method))
+        let methodImplementations = protocolDef.methods
+            .map(generateMethodImplementation)
+            .joined(separator: "\n")
+
+        code += methodImplementations
+        code += "}"
+
+        return MockFile(
+            name: mockName + ".swift",
+            content: code
+        )
+    }
+
+    // MARK: - Names
+
+    private func makeMockName(from protocolName: String) -> String {
+        if protocolName.hasSuffix("Protocol") {
+            return String(protocolName.dropLast("Protocol".count)) + "Mock"
         }
 
-        code += methodLines.joined(separator: "\n")
-        code += "\n}"
+        return protocolName + "Mock"
+    }
 
-        return MockFile(name: mockName + ".swift", content: code)
+    private func methodIdentifier(_ method: ProtocolMethod) -> String {
+        let sameNameMethods = protocolDef.methods.filter { $0.name == method.name }
+
+        guard sameNameMethods.count > 1 else {
+            return sanitizeIdentifier(method.name)
+        }
+
+        let overloadIndex = methodOverloadIndex(method)
+
+        if overloadIndex == 1 {
+            return sanitizeIdentifier(method.name)
+        } else {
+            return sanitizeIdentifier(method.name) + "\(overloadIndex)"
+        }
+    }
+
+    private func methodOverloadIndex(_ method: ProtocolMethod) -> Int {
+        var index = 0
+
+        for candidate in protocolDef.methods {
+            if candidate.name == method.name {
+                index += 1
+            }
+
+            if candidate.name == method.name && candidate.fullSignature == method.fullSignature {
+                return index
+            }
+        }
+
+        return 1
     }
 
     private func generatePropertyName(method: ProtocolMethod, param: MethodParameter) -> String {
-        let baseName = "\(method.name)\(capitalizeFirstLetter(param.name))"
-
-        // Найди все методы с таким же именем
-        let sameNameMethods = protocolDef.methods.filter { $0.name == method.name }
-
-        if sameNameMethods.count <= 1 {
-            // Нет перегрузок
-            return baseName
-        }
-
-        // Есть перегрузки, проверь конфликты параметров с таким же именем
-        let sameParamNameMethods = sameNameMethods.filter { m in
-            m.parameters.contains { $0.name == param.name }
-        }
-
-        if sameParamNameMethods.count > 1 {
-            // Конфликт - параметр с таким же именем в разных методах перегрузки
-            // Добавляю short type
-            let shortType = getShortType(param.type)
-            return "\(baseName)\(shortType)"
-        }
-
-        return baseName
+        methodIdentifier(method) + capitalizeFirstLetter(sanitizeIdentifier(param.name))
     }
 
-    private func getShortType(_ type: String) -> String {
-        var clean = type
-        clean = clean.replacingOccurrences(of: "@escaping ", with: "")
-        clean = clean.replacingOccurrences(of: "?", with: "")
-        clean = clean.replacingOccurrences(of: "[", with: "")
-        clean = clean.replacingOccurrences(of: "]", with: "")
-        clean = clean.replacingOccurrences(of: "(", with: "")
-        clean = clean.replacingOccurrences(of: ")", with: "")
-        clean = clean.replacingOccurrences(of: "<", with: "")
-        clean = clean.replacingOccurrences(of: ">", with: "")
-        clean = clean.replacingOccurrences(of: ":", with: "")
-        clean = clean.trimmingCharacters(in: .whitespaces)
-
-        // Get first character
-        if let first = clean.first {
-            return String(first).uppercased()
-        }
-        return "T"
+    private func successFlagName(for method: ProtocolMethod) -> String {
+        "is" + capitalizeFirstLetter(methodIdentifier(method)) + "Success"
     }
 
-    private func makePropertyType(_ paramType: String) -> String {
-        // Remove @escaping attribute from closure types
-        var cleanType = paramType.replacingOccurrences(of: "@escaping ", with: "")
-        
-        // Remove trailing ? to normalize
-        if cleanType.hasSuffix("?") {
-            cleanType = String(cleanType.dropLast())
+    private func sanitizeIdentifier(_ value: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
+
+        let scalars = value.unicodeScalars.map { scalar -> String in
+            allowed.contains(scalar) ? String(scalar) : ""
         }
-        
-        // Check if it's a closure type (contains ->)
-        if cleanType.contains("->") {
-            // Wrap closure in parentheses and ALWAYS make optional
-            return "(\(cleanType))?"
+
+        let result = scalars.joined()
+
+        if result.isEmpty {
+            return "value"
         }
-        
-        // For non-closure types, just add ?
-        return "\(cleanType)?"
+
+        if result.first?.isNumber == true {
+            return "_" + result
+        }
+
+        return result
     }
 
-    private func capitalizeFirstLetter(_ str: String) -> String {
-        guard !str.isEmpty else { return str }
-        return str.prefix(1).uppercased() + str.dropFirst()
+    private func capitalizeFirstLetter(_ string: String) -> String {
+        guard !string.isEmpty else {
+            return string
+        }
+
+        return string.prefix(1).uppercased() + string.dropFirst()
     }
+
+    // MARK: - Properties generation
+
+    private func generateProtocolProperties() -> [String] {
+        protocolDef.properties.map { property in
+            let defaultValue = defaultValueExpression(for: property.type)
+            return "    var \(property.name): \(property.type) = \(defaultValue)"
+        }
+    }
+
+    private func generateTrackingProperties() -> [String] {
+        var lines: [String] = []
+
+        for (index, method) in protocolDef.methods.enumerated() {
+            let identifier = methodIdentifier(method)
+
+            if isInteractorProtocol && method.returnType != "Void" {
+                lines.append("    var \(successFlagName(for: method)) = true")
+            }
+
+            lines.append("    private(set) var \(identifier)CallCount = 0")
+
+            for parameter in method.parameters {
+                let propertyName = generatePropertyName(method: method, param: parameter)
+                let propertyType = makeCapturedPropertyType(parameter.type)
+                lines.append("    private(set) var \(propertyName): \(propertyType)")
+            }
+
+            if index < protocolDef.methods.count - 1 {
+                lines.append("")
+            }
+        }
+
+        return lines
+    }
+
+    private func makeCapturedPropertyType(_ paramType: String) -> String {
+        let clean = cleanType(paramType)
+
+        if isOptional(clean) {
+            return clean
+        }
+
+        if isClosureType(clean) {
+            return "(\(clean))?"
+        }
+
+        return "\(clean)?"
+    }
+
+    // MARK: - Method generation
 
     private func generateMethodImplementation(_ method: ProtocolMethod) -> String {
-        let methodNameCamel = method.name
-        let callCountProp = "\(methodNameCamel)CallCount"
+        let identifier = methodIdentifier(method)
 
-        // Используем оригинальную многострочную сигнатуру если есть
-        var sig: String
-        if let originalSig = method.originalSignature {
-            // Добавляем отступ (4 пробела) к каждой строке оригинальной сигнатуры
-            let sigLines = originalSig.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-            let indented = sigLines.map { line -> String in
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                return trimmed.isEmpty ? "" : "    " + trimmed
-            }.joined(separator: "\n")
-            sig = indented
+        var signature: String
+
+        if let originalSignature = method.originalSignature {
+            signature = formatOriginalSignature(originalSignature)
         } else {
-            sig = "    func \(method.fullSignature)"
+            signature = "    func \(method.fullSignature)"
         }
 
-        sig += " {\n"
+        signature += " {\n"
 
-        // Method body
-        var body = "        \(callCountProp) += 1\n"
+        var body = ""
+        body += "        \(identifier)CallCount += 1\n"
 
-        // Capture parameters
-        for param in method.parameters {
-            let propName = generatePropertyName(method: method, param: param)
-            body += "        \(propName) = \(param.name)\n"
+        for parameter in method.parameters {
+            let propertyName = generatePropertyName(method: method, param: parameter)
+            body += "        \(propertyName) = \(parameter.name)\n"
         }
 
-        // Add return logic only if not Void
         if method.returnType != "Void" {
             body += "\n"
 
-            // Return value
-            if method.returnType.contains("Single<") {
-                let innerType = extractGenericType(method.returnType)
-                body += "        return .just(\(innerType)())\n"
-            } else if method.returnType.contains("Completable") {
-                body += "        return .empty()\n"
-            } else if method.isAsync || method.isThrows {
-                if isOptional(method.returnType) {
-                    body += "        return nil\n"
-                } else {
-                    body += "        return \(method.returnType)()\n"
-                }
+            if isInteractorProtocol {
+                body += generateInteractorReturnBody(for: method)
             } else {
-                if isOptional(method.returnType) {
-                    body += "        return nil\n"
-                } else {
-                    body += "        return \(method.returnType)()\n"
-                }
+                body += generateDefaultReturnBody(for: method)
             }
         }
 
         body += "    }\n"
 
-        return sig + body
+        return signature + body
+    }
+
+    private func generateInteractorReturnBody(for method: ProtocolMethod) -> String {
+        let successFlag = successFlagName(for: method)
+
+        if method.returnType.contains("Single<") {
+            let responseType = extractGenericType(method.returnType)
+
+            return """
+        if \(successFlag) {
+            let response: \(responseType)! = Data.getResponse(
+                bundleClass: Self.self,
+                jsonName: "\(responseType)Test",
+                responseType: \(responseType).self
+            )
+            return .just(response)
+        } else {
+            return .failure(SystemError.common)
+        }
+
+"""
+        }
+
+        if method.returnType.contains("Completable") {
+            return """
+        if \(successFlag) {
+            return .empty()
+        } else {
+            return .error(SystemError.common)
+        }
+
+"""
+        }
+
+        let responseType = method.returnType
+
+        if method.isThrows {
+            return """
+        if \(successFlag) {
+            let response: \(responseType)! = Data.getResponse(
+                bundleClass: Self.self,
+                jsonName: "\(responseType)Test",
+                responseType: \(responseType).self
+            )
+            return response
+        } else {
+            throw SystemError.common
+        }
+
+"""
+        }
+
+        return """
+        let response: \(responseType)! = Data.getResponse(
+            bundleClass: Self.self,
+            jsonName: "\(responseType)Test",
+            responseType: \(responseType).self
+        )
+        return response
+
+"""
+    }
+
+    private func generateDefaultReturnBody(for method: ProtocolMethod) -> String {
+        let returnType = method.returnType
+
+        if returnType.contains("Single<") {
+            let innerType = extractGenericType(returnType)
+            let defaultValue = defaultValueExpression(for: innerType)
+            return "        return .just(\(defaultValue))\n"
+        }
+
+        if returnType.contains("Completable") {
+            return "        return .empty()\n"
+        }
+
+        let defaultValue = defaultValueExpression(for: returnType)
+        return "        return \(defaultValue)\n"
+    }
+
+    private func formatOriginalSignature(_ originalSignature: String) -> String {
+        let lines = originalSignature
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { String($0).replacingOccurrences(of: "\t", with: "    ") }
+
+        let nonEmptyLines = lines.filter {
+            !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+
+        let minIndent = nonEmptyLines
+            .map { leadingWhitespaceCount($0) }
+            .min() ?? 0
+
+        return lines
+            .map { line in
+                let normalized = removeLeadingWhitespace(line, count: minIndent)
+
+                if normalized.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return ""
+                }
+
+                return "    " + normalized
+            }
+            .joined(separator: "\n")
+    }
+
+    private func leadingWhitespaceCount(_ string: String) -> Int {
+        var count = 0
+
+        for character in string {
+            if character == " " {
+                count += 1
+            } else {
+                break
+            }
+        }
+
+        return count
+    }
+
+    private func removeLeadingWhitespace(_ string: String, count: Int) -> String {
+        var result = string
+        var removed = 0
+
+        while removed < count, result.first == " " {
+            result.removeFirst()
+            removed += 1
+        }
+
+        return result
+    }
+
+    // MARK: - Type helpers
+
+    private func cleanType(_ type: String) -> String {
+        type
+            .replacingOccurrences(of: "@escaping ", with: "")
+            .replacingOccurrences(of: "@autoclosure ", with: "")
+            .replacingOccurrences(of: "@Sendable ", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func isOptional(_ type: String) -> Bool {
+        let clean = type.trimmingCharacters(in: .whitespacesAndNewlines)
+        return clean.hasSuffix("?")
+    }
+
+    private func isClosureType(_ type: String) -> Bool {
+        type.contains("->")
     }
 
     private func extractGenericType(_ type: String) -> String {
         guard let start = type.firstIndex(of: "<"),
-              let end = type.lastIndex(of: ">") else {
+              let end = type.lastIndex(of: ">"),
+              start < end else {
             return type
         }
+
         return String(type[type.index(after: start)..<end])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func isOptional(_ type: String) -> Bool {
-        return type.hasSuffix("?")
+    private func defaultValueExpression(for rawType: String) -> String {
+        let type = cleanType(rawType)
+
+        if isOptional(type) {
+            return "nil"
+        }
+
+        if isClosureType(type) {
+            return closureDefaultValue(for: type)
+        }
+
+        switch type {
+        case "String":
+            return "\"\""
+        case "Bool":
+            return "false"
+        case "Int", "Int8", "Int16", "Int32", "Int64":
+            return "0"
+        case "UInt", "UInt8", "UInt16", "UInt32", "UInt64":
+            return "0"
+        case "Double", "Float", "CGFloat", "TimeInterval":
+            return "0"
+        case "Decimal":
+            return "0"
+        case "Date":
+            return "Date()"
+        case "Data":
+            return "Data()"
+        case "URL":
+            return "URL(string: \"https://example.com\")!"
+        case "UUID":
+            return "UUID()"
+        case "IndexPath":
+            return "IndexPath()"
+        case "Any":
+            return "()"
+        case "AnyObject":
+            return "NSObject()"
+        default:
+            break
+        }
+
+        if type.hasPrefix("[") {
+            return "[]"
+        }
+
+        if type.hasPrefix("Array<") {
+            return "[]"
+        }
+
+        if type.hasPrefix("Dictionary<") {
+            return "[:]"
+        }
+
+        if type.hasPrefix("Set<") {
+            return "[]"
+        }
+
+        return "\(type)()"
+    }
+
+    private func closureDefaultValue(for type: String) -> String {
+        let stripped = stripOuterParentheses(type)
+
+        guard let arrowRange = stripped.range(of: "->") else {
+            return "{}"
+        }
+
+        let paramsPart = String(stripped[..<arrowRange.lowerBound])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let returnPart = String(stripped[arrowRange.upperBound...])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let parameterCount = closureParameterCount(paramsPart)
+        let parametersExpression: String
+
+        if parameterCount == 0 {
+            parametersExpression = ""
+        } else {
+            parametersExpression = Array(repeating: "_", count: parameterCount)
+                .joined(separator: ", ") + " in "
+        }
+
+        if returnPart == "Void" || returnPart == "()" {
+            return "{ \(parametersExpression)}"
+        }
+
+        let returnDefault = defaultValueExpression(for: returnPart)
+        return "{ \(parametersExpression)\(returnDefault) }"
+    }
+
+    private func stripOuterParentheses(_ type: String) -> String {
+        var result = type.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        while result.hasPrefix("(") && result.hasSuffix(")") {
+            result.removeFirst()
+            result.removeLast()
+            result = result.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return result
+    }
+
+    private func closureParameterCount(_ paramsPart: String) -> Int {
+        let clean = stripOuterParentheses(paramsPart)
+
+        if clean.isEmpty || clean == "Void" || clean == "()" {
+            return 0
+        }
+
+        return splitTopLevelComma(clean).count
+    }
+
+    private func splitTopLevelComma(_ string: String) -> [String] {
+        var result: [String] = []
+        var current = ""
+        var depth = 0
+        var isInsideString = false
+        var previousCharacter: Character?
+
+        for character in string {
+            if character == "\"" && previousCharacter != "\\" {
+                isInsideString.toggle()
+            }
+
+            if !isInsideString {
+                if character == "<" || character == "[" || character == "(" {
+                    depth += 1
+                } else if character == ">" || character == "]" || character == ")" {
+                    depth -= 1
+                } else if character == "," && depth == 0 {
+                    result.append(current.trimmingCharacters(in: .whitespacesAndNewlines))
+                    current = ""
+                    previousCharacter = character
+                    continue
+                }
+            }
+
+            current.append(character)
+            previousCharacter = character
+        }
+
+        let tail = current.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if !tail.isEmpty {
+            result.append(tail)
+        }
+
+        return result
+    }
+}
+
+// MARK: - String helpers
+
+private extension String {
+
+    func containsWord(_ word: String) -> Bool {
+        let pattern = "\\b\(NSRegularExpression.escapedPattern(for: word))\\b"
+
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return false
+        }
+
+        let nsString = self as NSString
+        let fullRange = NSRange(location: 0, length: nsString.length)
+
+        return regex.firstMatch(in: self, range: fullRange) != nil
     }
 }
