@@ -1,23 +1,75 @@
 import SwiftUI
 
-// MARK: - NSTextView Wrapper для правильного скролла и выделения
+// MARK: - NSTextView Wrapper для правильного скролла, выделения и Cmd+C
 struct TextViewRepresentable: NSViewRepresentable {
     var text: String
 
-    func makeNSView(context: Context) -> NSTextView {
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .noBorder
+        scrollView.drawsBackground = true
+        scrollView.backgroundColor = NSColor(calibratedWhite: 0.12, alpha: 1.0)
+
         let textView = NSTextView()
+
         textView.string = text
         textView.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
         textView.isEditable = false
         textView.isSelectable = true
+        textView.allowsUndo = false
+
         textView.backgroundColor = NSColor(calibratedWhite: 0.12, alpha: 1.0)
         textView.textColor = NSColor(calibratedWhite: 0.92, alpha: 1.0)
+        textView.insertionPointColor = NSColor(calibratedWhite: 0.92, alpha: 1.0)
 
-        return textView
+        textView.textContainerInset = NSSize(width: 8, height: 8)
+
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = true
+
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(
+            width: CGFloat.greatestFiniteMagnitude,
+            height: CGFloat.greatestFiniteMagnitude
+        )
+
+        textView.autoresizingMask = [.width]
+
+        textView.textContainer?.containerSize = NSSize(
+            width: CGFloat.greatestFiniteMagnitude,
+            height: CGFloat.greatestFiniteMagnitude
+        )
+        textView.textContainer?.widthTracksTextView = false
+
+        scrollView.documentView = textView
+
+        return scrollView
     }
 
-    func updateNSView(_ nsView: NSTextView, context: Context) {
-        nsView.string = text
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        guard let textView = scrollView.documentView as? NSTextView else {
+            return
+        }
+
+        guard textView.string != text else {
+            return
+        }
+
+        let selectedRange = textView.selectedRange()
+        let visibleRect = scrollView.contentView.bounds
+
+        textView.string = text
+
+        if selectedRange.location <= textView.string.count {
+            textView.setSelectedRange(selectedRange)
+        }
+
+        scrollView.contentView.scroll(to: visibleRect.origin)
+        scrollView.reflectScrolledClipView(scrollView.contentView)
     }
 }
 
@@ -72,6 +124,7 @@ protocol MyRouterProtocol: AnyObject {
                         .allowsHitTesting(false)
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .border(Color.gray.opacity(0.3))
                 .cornerRadius(4)
 
@@ -141,6 +194,7 @@ protocol MyRouterProtocol: AnyObject {
                         .cornerRadius(4)
                 } else {
                     TextViewRepresentable(text: viewModel.generatedMock)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .border(Color.gray.opacity(0.3))
                         .cornerRadius(4)
                 }
@@ -152,9 +206,6 @@ protocol MyRouterProtocol: AnyObject {
                     HStack(spacing: 8) {
                         Image(systemName: "doc.on.doc")
                         Text("Copy to Clipboard")
-                        Text("⌘C")
-                            .font(.system(size: 10, weight: .regular))
-                            .foregroundColor(.white.opacity(0.7))
                     }
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white)
@@ -165,7 +216,6 @@ protocol MyRouterProtocol: AnyObject {
                 }
                 .buttonStyle(.plain)
                 .disabled(viewModel.generatedMock.isEmpty)
-                .keyboardShortcut("c", modifiers: .command)
             }
             .padding()
             .background(Color(.controlBackgroundColor))
