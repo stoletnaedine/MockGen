@@ -6,11 +6,40 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		B0F6640B304845D300FA5459 /* MockGenApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0F6640A304845CC00FA5459 /* MockGenApp.swift */; };
+		B0F6640D304845F800FA5459 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0F6640C304845F700FA5459 /* ContentView.swift */; };
+		B0F6640F3048460B00FA5459 /* MockGenViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0F6640E3048460A00FA5459 /* MockGenViewModel.swift */; };
+		B0F664113048462600FA5459 /* MockGen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0F664103048462500FA5459 /* MockGen.swift */; };
+		B0F664133048463800FA5459 /* Helpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0F664123048463700FA5459 /* Helpers.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B0F4EA4130495D7600025E03 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B0F663F43048459600FA5459 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B0F663FB3048459600FA5459;
+			remoteInfo = MockGen;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		B0F4EA3D30495D7600025E03 /* MockGenTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MockGenTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B0F663FC3048459600FA5459 /* MockGen.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MockGen.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B0F6640A304845CC00FA5459 /* MockGenApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockGenApp.swift; sourceTree = "<group>"; };
+		B0F6640C304845F700FA5459 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		B0F6640E3048460A00FA5459 /* MockGenViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockGenViewModel.swift; sourceTree = "<group>"; };
+		B0F664103048462500FA5459 /* MockGen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockGen.swift; sourceTree = "<group>"; };
+		B0F664123048463700FA5459 /* Helpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Helpers.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		B0F4EA3E30495D7600025E03 /* MockGenTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MockGenTests;
+			sourceTree = "<group>";
+		};
 		B0F663FE3048459600FA5459 /* MockGen */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = MockGen;
@@ -19,6 +48,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		B0F4EA3A30495D7600025E03 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		B0F663F93048459600FA5459 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -33,7 +69,13 @@
 			isa = PBXGroup;
 			children = (
 				B0F663FE3048459600FA5459 /* MockGen */,
+				B0F4EA3E30495D7600025E03 /* MockGenTests */,
 				B0F663FD3048459600FA5459 /* Products */,
+				B0F6640A304845CC00FA5459 /* MockGenApp.swift */,
+				B0F6640C304845F700FA5459 /* ContentView.swift */,
+				B0F6640E3048460A00FA5459 /* MockGenViewModel.swift */,
+				B0F664103048462500FA5459 /* MockGen.swift */,
+				B0F664123048463700FA5459 /* Helpers.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -41,6 +83,7 @@
 			isa = PBXGroup;
 			children = (
 				B0F663FC3048459600FA5459 /* MockGen.app */,
+				B0F4EA3D30495D7600025E03 /* MockGenTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -48,6 +91,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		B0F4EA3C30495D7600025E03 /* MockGenTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B0F4EA4330495D7600025E03 /* Build configuration list for PBXNativeTarget "MockGenTests" */;
+			buildPhases = (
+				B0F4EA3930495D7600025E03 /* Sources */,
+				B0F4EA3A30495D7600025E03 /* Frameworks */,
+				B0F4EA3B30495D7600025E03 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B0F4EA4230495D7600025E03 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				B0F4EA3E30495D7600025E03 /* MockGenTests */,
+			);
+			name = MockGenTests;
+			packageProductDependencies = (
+			);
+			productName = MockGenTests;
+			productReference = B0F4EA3D30495D7600025E03 /* MockGenTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		B0F663FB3048459600FA5459 /* MockGen */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = B0F664073048459800FA5459 /* Build configuration list for PBXNativeTarget "MockGen" */;
@@ -80,8 +146,13 @@
 				LastSwiftUpdateCheck = 2660;
 				LastUpgradeCheck = 2660;
 				TargetAttributes = {
+					B0F4EA3C30495D7600025E03 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = B0F663FB3048459600FA5459;
+					};
 					B0F663FB3048459600FA5459 = {
 						CreatedOnToolsVersion = 26.6;
+						LastSwiftMigration = 2660;
 					};
 				};
 			};
@@ -100,11 +171,19 @@
 			projectRoot = "";
 			targets = (
 				B0F663FB3048459600FA5459 /* MockGen */,
+				B0F4EA3C30495D7600025E03 /* MockGenTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		B0F4EA3B30495D7600025E03 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		B0F663FA3048459600FA5459 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -115,16 +194,74 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		B0F663F83048459600FA5459 /* Sources */ = {
+		B0F4EA3930495D7600025E03 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B0F663F83048459600FA5459 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B0F664113048462600FA5459 /* MockGen.swift in Sources */,
+				B0F6640F3048460B00FA5459 /* MockGenViewModel.swift in Sources */,
+				B0F6640D304845F800FA5459 /* ContentView.swift in Sources */,
+				B0F664133048463800FA5459 /* Helpers.swift in Sources */,
+				B0F6640B304845D300FA5459 /* MockGenApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		B0F4EA4230495D7600025E03 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B0F663FB3048459600FA5459 /* MockGen */;
+			targetProxy = B0F4EA4130495D7600025E03 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		B0F4EA4430495D7600025E03 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mockgen.app.MockGenTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MockGen.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MockGen";
+			};
+			name = Debug;
+		};
+		B0F4EA4530495D7600025E03 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mockgen.app.MockGenTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MockGen.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MockGen";
+			};
+			name = Release;
+		};
 		B0F664053048459800FA5459 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -248,9 +385,12 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
+				CLANG_ENABLE_MODULES = YES;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -260,14 +400,17 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mockgen.app.MockGen;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -278,9 +421,12 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
+				CLANG_ENABLE_MODULES = YES;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -290,9 +436,11 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mockgen.app.MockGen;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -306,6 +454,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		B0F4EA4330495D7600025E03 /* Build configuration list for PBXNativeTarget "MockGenTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B0F4EA4430495D7600025E03 /* Debug */,
+				B0F4EA4530495D7600025E03 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		B0F663F73048459600FA5459 /* Build configuration list for PBXProject "MockGen" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
